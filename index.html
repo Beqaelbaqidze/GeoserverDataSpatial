@@ -70,7 +70,7 @@
         display: flex;
         justify-content: space-between;
       }
-      .modal {
+      .modal1 {
         display: none; /* Hidden by default */
         position: fixed;
         z-index: 100; /* Sit on top */
@@ -82,7 +82,7 @@
         background-color: rgba(0, 0, 0, 0.5); /* Black w/ opacity */
       }
 
-      .modal-content {
+      .modal-content1 {
         background-color: #fefefe;
         margin: 15% auto;
         padding: 20px;
@@ -90,9 +90,37 @@
         width: 30%;
         text-align: center;
       }
+
+      .modal {
+        display: none; /* Hidden by default */
+        position: fixed;
+        z-index: 100; /* Sit on top */
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0, 0, 0, 0.5); /* Black w/ opacity */
+      }
+      
+      .modal-content {
+        background-color: #fefefe;
+        margin: 15% auto;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 50%;
+        text-align: center;
+      }
+      
+      #saveAttributesBtn, #cancelAttributesBtn {
+        margin-top: 10px;
+        padding: 10px 15px;
+        cursor: pointer;
+      }
     </style>
   </head>
   <body>
+
     <div id="map-container">
       <div id="sidebar"></div>
       <div id="map"></div>
@@ -100,13 +128,23 @@
         <button id="closeGridBtn">Close</button>
         <div id="attributeGrid"></div>
       </div>
-      <div id="saveModal" class="modal">
-        <div class="modal-content">
+      <div id="saveModal" class="modal1">
+        <div class="modal-content1">
           <p>Do you want to save the changes?</p>
           <button id="saveBtn">Save</button>
           <button id="discardBtn">Discard</button>
         </div>
       </div>
+      <div id="featureFormModal" class="modal">
+        <div class="modal-content">
+          <h2>Edit Feature Attributes</h2>
+          <div id="attributeForm"></div>
+          <button id="saveAttributesBtn">Save Attributes</button>
+          <button id="cancelAttributesBtn">Cancel</button>
+        </div>
+      </div>
+      
+      
     </div>
     <script src="main.js" type="module"></script>
   </body>

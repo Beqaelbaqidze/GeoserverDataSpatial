@@ -11,13 +11,15 @@ import { get as getProjection, fromLonLat } from "ol/proj";
 import { register } from "ol/proj/proj4";
 import proj4 from "proj4";
 import Draw from "ol/interaction/Draw";
+import GML from "ol/format/GML";
+import GML3 from "ol/format/GML3";
 
 // Define the projection for EPSG:32638
 proj4.defs("EPSG:32638", "+proj=utm +zone=38 +datum=WGS84 +units=m +no_defs");
 register(proj4);
 
 // Define your GeoServer URL and workspace
-const geoServerUrl = "http://localhost:8080/geoserver/CreateData/ows";
+const geoServerUrl = "http://localhost:8080/geoserver/CreateData/wfs";
 const workspace = "CreateData";
 
 // Construct the transformed URLs to request data in EPSG:32638
@@ -86,7 +88,8 @@ const topoPointStyle = new Style({
   }),
 });
 
-// Initialize map layers for each dataset
+
+// Initialize map layers for each dataset with explicit id setting
 const nakvetiLayer = new VectorLayer({
   source: new VectorSource({
     url: nakvetiUrl,
@@ -94,6 +97,7 @@ const nakvetiLayer = new VectorLayer({
   }),
   style: nakvetiStyle,
 });
+nakvetiLayer.set('id', 'nakvetiLayer'); // Set the id property for later reference
 
 const shenobaLayer = new VectorLayer({
   source: new VectorSource({
@@ -102,6 +106,7 @@ const shenobaLayer = new VectorLayer({
   }),
   style: shenobaStyle,
 });
+shenobaLayer.set('id', 'shenobaLayer'); // Set the id property for later reference
 
 const topoLineLayer = new VectorLayer({
   source: new VectorSource({
@@ -110,6 +115,7 @@ const topoLineLayer = new VectorLayer({
   }),
   style: topoLineStyle,
 });
+topoLineLayer.set('id', 'topoLineLayer'); // Set the id property for later reference
 
 const topoPointLayer = new VectorLayer({
   source: new VectorSource({
@@ -118,6 +124,8 @@ const topoPointLayer = new VectorLayer({
   }),
   style: topoPointStyle,
 });
+topoPointLayer.set('id', 'topoPointLayer'); // Set the id property for later reference
+
 
 // Create the OpenLayers map with a proper View
 const map = new Map({
@@ -258,7 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.draw-pen').forEach(button => {
     button.addEventListener('click', (event) => {
       const layerId = event.target.getAttribute('data-layer');
-      addDrawInteraction(layerId);
+      addDrawInteractionTypes(layerId);
     });
   });
 
@@ -275,3 +283,112 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
+let vtype;
+
+function addDrawInteractionTypes(layerId) {
+  switch (layerId) {
+    case 'nakvetiLayer':
+      vtype = 'Polygon';
+      break;
+    case 'shenobaLayer':
+      vtype = 'Polygon';
+      break;
+    case 'topoLineLayer':
+      vtype = 'LineString';
+      break;
+    case 'topoPointLayer':
+      vtype = 'Point';
+      break;
+    default:
+      vtype = 'Point';  // default to Point if the layerId is unrecognized
+  }
+
+  addDrawInteraction(layerId, vtype);
+}
+
+function addDrawInteraction(layerId, vtype) {
+  const layer = map.getLayers().getArray().find(l => l.get('id') === layerId);
+
+  if (!layer) {
+    console.error(`Layer with id ${layerId} not found!`);
+    return;
+  }
+
+  const source = layer.getSource();
+
+  const drawInteraction = new Draw({
+    source: source,
+    type: vtype,
+  });
+
+  // Event listener for when the drawing ends
+  drawInteraction.on('drawend', function (event) {
+    console.log(`Drawing ended on layer: ${layerId}`);
+
+    // Call the function to save the drawn feature to GeoServer
+    saveFeatureToGeoServer(layerId, event.feature); // Pass the layerId and the drawn feature
+  });
+
+  // Add the draw interaction to the map
+  map.addInteraction(drawInteraction);
+}
+
+
+
+
+function saveFeatureToGeoServer(layerId, feature) {
+  // Ensure the feature has a valid geometry
+  const geometry = feature.getGeometry();
+  if (!geometry) {
+    console.error('Feature has no geometry');
+    return;
+  }
+
+  // Use GML3 for better compatibility with GeoServer
+  const gmlFormat = new GML3({
+    featureNS: 'http://www.example.com/myLayerNamespace', // Replace with your GeoServer namespace
+    featureType: 'NakveTi', // Use the correct layer name
+    srsName: 'EPSG:32638', // The projection of the geometry
+  });
+  console.log(gmlFormat)
+  // Convert the feature to GML format
+  const gmlString = gmlFormat.writeFeatures([feature], {
+    dataProjection: 'EPSG:32638',
+    featureProjection: map.getView().getProjection()
+  });
+  
+  // Prepare the XML request for WFS-T Insert operation
+  const xmlRequest = `
+    <wfs:Transaction service="WFS" version="1.1.0"
+      xmlns:wfs="http://www.opengis.net/wfs"
+      xmlns:gml="http://www.opengis.net/gml"
+      xmlns:ogc="http://www.opengis.net/ogc"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.opengis.net/wfs http://schemas.opengis.net/wfs/1.1.0/WFS-transaction.xsd"
+      xmlns:CreateData="http://www.example.com/myLayerNamespace">
+      <wfs:Insert idgen="GenerateNew">
+        <CreateData:NakveTi>
+          <CreateData:the_geom>
+            ${gmlString}
+          </CreateData:the_geom>
+        </CreateData:NakveTi>
+      </wfs:Insert>
+    </wfs:Transaction>
+  `;
+
+  // Send the data to GeoServer
+  fetch('http://localhost:8080/geoserver/wfs', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'text/xml',
+    },
+    body: xmlRequest,
+  })
+    .then(response => response.text())
+    .then(data => {
+      console.log('Feature successfully saved:', data);
+    })
+    .catch(error => {
+      console.error('Error saving feature:', error);
+    });
+}
